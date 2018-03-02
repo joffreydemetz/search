@@ -86,7 +86,7 @@ class Seeker implements SeekerInterface
   /** 
    * {@inheritDoc}
    */
-  public function list($callback=null)
+  public function list()
   {
     $db = Dbo();
     
