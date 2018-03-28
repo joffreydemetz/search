@@ -63,6 +63,14 @@ class Seeker implements SeekerInterface
   }
   
   /** 
+   * Get the table instance
+   */
+  public function getTable()
+  {
+    return $this->table;
+  }
+  
+  /** 
    * {@inheritDoc}
    */
   public function setCriterias(array $criterias=[])
@@ -140,8 +148,8 @@ class Seeker implements SeekerInterface
   /** 
    * Get the list of criteria setted values
    * 
-   * @param   array   $criterias  Key/Value pairs
-   * @return   array   The criterias list
+   * @param  array  $criterias  Key/Value pairs
+   * @return array  The criterias list
    */
   protected function getCriteriasValues(array $criterias=[])
   {
@@ -205,6 +213,9 @@ class Seeker implements SeekerInterface
     if ( $or = $this->setQueryWhere(false) ){
       $this->query->where('('.implode(' OR ', $or).')');
     }
+    
+    // echo str_replace('#__', 'kdg_', (string)$this->query);
+    // exit(0);
   }
   
   /** 
@@ -223,7 +234,7 @@ class Seeker implements SeekerInterface
     
     return $or;
   }
-
+  
   /** 
    * Add a boolean filter field
    * 
