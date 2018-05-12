@@ -17,25 +17,25 @@ interface SaverInterface
   /** 
    * Save the new record
    * 
-   * @return   bool  True if saved successfully
+   * @return bool  True if saved successfully
    */
   public function save();
   
   /** 
    * Set a property value
    * 
-   * @param   string  $key     The property key
-   * @param   mixed   $value   The property value
-   * @return   void
+   * @param  string  $key     The property key
+   * @param  mixed   $value   The property value
+   * @return $this
    */
   public function set($key, $value);
   
   /** 
    * Set a filter value
    * 
-   * @param   string  $key     The filter key
-   * @param   mixed   $value   The filter value
-   * @return   void
+   * @param  string  $key     The filter key
+   * @param  mixed   $value   The filter value
+   * @return $this
    */
   public function setFilter($key, $value);
 }

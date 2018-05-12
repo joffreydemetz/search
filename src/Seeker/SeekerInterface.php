@@ -18,7 +18,7 @@ interface SeekerInterface
    * Count elements
    * 
    * @param  array  $criterias  Key/Value pairs of criterias   
-   * @return void
+   * @return $this
    */
   public function setCriterias(array $criterias=[]);
 

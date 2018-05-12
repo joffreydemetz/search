@@ -76,6 +76,7 @@ class Seeker implements SeekerInterface
   public function setCriterias(array $criterias=[])
   {
     $this->criterias = new Criterias($this->getCriteriasDefaults(), $this->getCriteriasValues($criterias));
+    return $this;
   }
   
   /** 
@@ -130,7 +131,7 @@ class Seeker implements SeekerInterface
   {
     $criterias['start']       = 0;
     $criterias['limit']       = 0;
-    $criterias['ordering']    = $this->table->getDefaultOrdering();
+    $criterias['ordering']    = 'a.id';
     $criterias['orderingDir'] = 'ASC';
     $criterias['stype']       = 'contains';
     

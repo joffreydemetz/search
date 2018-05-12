@@ -104,6 +104,7 @@ class Saver implements SaverInterface
   public function set($key, $value)
   {
     $this->data[$key] = $value;
+    return $this;
   }
   
   /** 
@@ -112,5 +113,6 @@ class Saver implements SaverInterface
   public function setFilter($key, $value)
   {
     $this->data['filters']{$key} = $value;
+    return $this;
   }
 }
