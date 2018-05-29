@@ -7,6 +7,7 @@
  */
 namespace JDZ\Search\Seeker;
 
+use JDZ\Database\DatabaseInterface;
 use JDZ\Database\Query\QueryInterface;
 use JDZ\Database\Table\TableInterface;
 use JDZ\Search\Criterias\Criterias;
@@ -24,6 +25,13 @@ class Seeker implements SeekerInterface
    * @var   Criterias
    */
   protected $criterias;
+  
+  /** 
+   * Database object
+   * 
+   * @var   DatabaseInterface
+   */
+  protected $dbo;
   
   /** 
    * Table object
@@ -47,19 +55,31 @@ class Seeker implements SeekerInterface
   protected $where;
   
   /** 
-   * Constructor
-   * 
-   * @param  TableInterface  $table      Table instance
-   * @param  array           $criterias  Key/Value pairs of criterias   
+   * {@inheritDoc}
    */
-  public function __construct(TableInterface $table, array $criterias=[])
+  public function setDbo(DatabaseInterface $dbo)
+  {
+    $this->dbo   = $dbo;
+    $this->query = $this->dbo->getQuery(true);
+    return $this;
+  }
+  
+  /** 
+   * {@inheritDoc}
+   */
+  public function setTable(TableInterface $table)
   {
     $this->table = $table;
-    
-    $db = Dbo();
-    $this->query = $db->getQuery(true);
-    
-    $this->setCriterias($criterias);
+    return $this;
+  }
+  
+  /** 
+   * {@inheritDoc}
+   */
+  public function setCriterias(array $criterias)
+  {
+    $this->criterias = new Criterias($this->getCriteriasDefaults(), $this->getCriteriasValues($criterias));
+    return $this;
   }
   
   /** 
@@ -73,10 +93,9 @@ class Seeker implements SeekerInterface
   /** 
    * {@inheritDoc}
    */
-  public function setCriterias(array $criterias=[])
+  public function getCriteria($key, $default=null)
   {
-    $this->criterias = new Criterias($this->getCriteriasDefaults(), $this->getCriteriasValues($criterias));
-    return $this;
+    return $this->criterias->get($key, $default);
   }
   
   /** 
@@ -84,12 +103,11 @@ class Seeker implements SeekerInterface
    */
   public function count()
   {
-    $db = Dbo();
     $this->query->clear();
     $this->setCountQuery();
-    $db->setQuery($this->query);
+    $this->dbo->setQuery($this->query);
     
-    return (int)$db->loadResult();
+    return (int)$this->dbo->loadResult();
   }
   
   /** 
@@ -97,28 +115,18 @@ class Seeker implements SeekerInterface
    */
   public function list()
   {
-    $db = Dbo();
-    
     $this->query->clear();
     $this->setListQuery();
     
     if ( $limit = $this->criterias->get('limit') ){
-      $db->setQuery($this->query, $this->criterias->get('start'), $limit);
+      $this->dbo->setQuery($this->query, $this->criterias->get('start'), $limit);
     }
     else {
-      $db->setQuery($this->query);
+      $this->dbo->setQuery($this->query);
     }
     
-    $rows = $db->loadObjectList();
+    $rows = $this->dbo->loadObjectList();
     return $this->formatResults($rows);
-  }
-  
-  /** 
-   * {@inheritDoc}
-   */
-  public function getCriteria($key, $default=null)
-  {
-    return $this->criterias->get($key, $default);
   }
   
   /** 
@@ -175,9 +183,7 @@ class Seeker implements SeekerInterface
    */
   protected function setCountQuery()
   {
-    $db = Dbo();
-    
-    $this->query->select('COUNT(DISTINCT('.$db->qn('a.'.$this->table->getTblKey()).'))');
+    $this->query->select('COUNT(DISTINCT('.$this->dbo->qn('a.'.$this->table->getTblKey()).'))');
     $this->query->from($this->table->getTbl().' AS a');
     
     if ( $this->table->publishingAble() ){
@@ -198,11 +204,9 @@ class Seeker implements SeekerInterface
    */
   protected function setListQuery()
   {
-    $db = Dbo();
-    
     $this->query->select('a.*');
     $this->query->from($this->table->getTbl().' AS a');
-    $this->query->order($db->qn($this->criterias->get('ordering')).' '.$this->criterias->get('orderingDir'));
+    $this->query->order($this->dbo->qn($this->criterias->get('ordering')).' '.$this->criterias->get('orderingDir'));
     $this->query->group('a.'.$this->table->getTblKey());
     
     if ( $this->table->publishingAble() ){
@@ -214,9 +218,6 @@ class Seeker implements SeekerInterface
     if ( $or = $this->setQueryWhere(false) ){
       $this->query->where('('.implode(' OR ', $or).')');
     }
-    
-    // echo str_replace('#__', 'kdg_', (string)$this->query);
-    // exit(0);
   }
   
   /** 
@@ -254,14 +255,13 @@ class Seeker implements SeekerInterface
       return false;
     }
     
-    $db = Dbo();
     $searchValue = (bool)$this->criterias->get($field);
     
     if ( $force === false && $searchValue === false ){
       return false;
     }
     
-    return $db->qn($prefix.$field).' = '.($searchValue?'1':'0');
+    return $this->dbo->qn($prefix.$field).' = '.($searchValue?'1':'0');
   }
   
   /** 
@@ -282,14 +282,13 @@ class Seeker implements SeekerInterface
       return false;
     }
     
-    $db = Dbo();
     $searchValue = (int)$this->criterias->get($field);
     
     if ( $force === false && $searchValue === 0 ){
       return false;
     }
     
-    return $db->qn($prefix.$field).' = '.$searchValue;
+    return $this->dbo->qn($prefix.$field).' = '.$searchValue;
   }
   
   /** 
@@ -316,22 +315,21 @@ class Seeker implements SeekerInterface
       return false;
     }
     
-    $db = Dbo();
     $stype  = $this->criterias->get('stype', 'contains');
     $searchValue = str_replace("'", "\'", $searchValue);
     
     if ( $stype === 'strict' ){
-      return $db->qn($prefix.$field).' LIKE '.$db->Quote($searchValue);
+      return $this->dbo->qn($prefix.$field).' LIKE '.$this->dbo->Quote($searchValue);
     }
     
     if ( $stype === 'startswith' ){
-      return $db->qn($prefix.$field).' LIKE'.$db->Quote($searchValue.'%');
+      return $this->dbo->qn($prefix.$field).' LIKE'.$this->dbo->Quote($searchValue.'%');
     }
     
     if ( $stype === 'endswith' ){
-      return $db->qn($prefix.$field).' LIKE '.$db->Quote('%'.$searchValue);
+      return $this->dbo->qn($prefix.$field).' LIKE '.$this->dbo->Quote('%'.$searchValue);
     }
     
-    return $db->qn($prefix.$field).' LIKE '.$db->Quote('%'.str_replace(' ', '%', $searchValue).'%');
+    return $this->dbo->qn($prefix.$field).' LIKE '.$this->dbo->Quote('%'.str_replace(' ', '%', $searchValue).'%');
   }
 }
