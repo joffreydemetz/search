@@ -183,7 +183,8 @@ class Seeker implements SeekerInterface
    */
   protected function setCountQuery()
   {
-    $this->query->select('COUNT(DISTINCT('.$this->dbo->qn('a.'.$this->table->getTblKey()).'))');
+    $this->query->select('COUNT(a.'.$this->table->getTblKey().')');
+    // $this->query->select('COUNT(DISTINCT('.$this->dbo->qn('a.'.$this->table->getTblKey()).'))');
     $this->query->from($this->table->getTbl().' AS a');
     
     if ( $this->table->publishingAble() ){

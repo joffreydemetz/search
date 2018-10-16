@@ -69,5 +69,5 @@ interface SeekerInterface
    * 
    * @return   array   The records filtered by criterias
    */
-  public function list();
+  public function list($formatter=null);
 }
