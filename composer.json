@@ -1,0 +1,36 @@
+{
+    "name": "jdz/search",
+    "type": "library",
+    "description": "Site search library with text isolation and highlighting",
+    "homepage": "https://github.com/joffreydemetz/search",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Joffrey Demetz",
+            "email": "joffrey.demetz@gmail.com",
+            "homepage": "https://joffreydemetz.com",
+            "role": "Lead"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "jdz/database": "^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "JDZ\\Search\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JDZ\\Search\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --colors=always --testdox",
+        "test-coverage": "phpunit --coverage-html coverage"
+    }
+}
