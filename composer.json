@@ -2,7 +2,7 @@
     "name": "jdz/search",
     "type": "library",
     "description": "Site search library with text isolation and highlighting",
-    "homepage": "https://github.com/joffreydemetz/search",
+    "homepage": "https://jdz.joffreydemetz.com/search",
     "license": "MIT",
     "authors": [
         {
@@ -11,6 +11,10 @@
             "homepage": "https://joffreydemetz.com",
             "role": "Lead"
         }
+    ],
+    "keywords": [
+        "JDZ",
+        "content"
     ],
     "require": {
         "php": ">=8.2",
