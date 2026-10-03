@@ -100,8 +100,8 @@ class Isolator
 
       $w = 0;
       $cbw = count($beforeWords);
-      for ($i = $cbw - 1; $i > 0 && $w <= $this->numWordsAround; $i--) {
-        if ($w > ($this->numWordsAround - 4) && preg_match("/[\):,;\.]+/", $beforeWords[$i]) !== false) {
+      for ($i = $cbw - 1; $i >= 0 && $w <= $this->numWordsAround; $i--) {
+        if ($w > ($this->numWordsAround - 4) && 1 === preg_match("/[\):,;\.]+/", $beforeWords[$i])) {
           break;
         }
         array_unshift($keep, $beforeWords[$i]);
