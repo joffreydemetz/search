@@ -19,10 +19,13 @@ class Isolator
 
   public function setRegexFromSearchArray(array $searchArray): static
   {
+    $terms = array_filter($searchArray, fn($term) => '' !== $term);
+    $terms = array_map(fn($term) => preg_quote($term, '/'), $terms);
+
     $regex = ''
       . '(.*)'
       . '('
-      . implode('|', $searchArray)
+      . implode('|', $terms)
       . ')'
       . '(.*)';
 
