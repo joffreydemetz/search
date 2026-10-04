@@ -15,8 +15,8 @@ abstract class Searcher implements SearcherInterface
   protected string $name = '';
   protected string $title = '';
   protected array $fields = [];
-  protected string $term;
-  protected string $type;
+  protected string $term = '';
+  protected string $type = '';
 
   private Isolator $isolator;
 
@@ -58,7 +58,7 @@ abstract class Searcher implements SearcherInterface
 
   public function setTerm(?string $term): static
   {
-    $this->term = $term;
+    $this->term = $term ?? '';
     return $this;
   }
 
