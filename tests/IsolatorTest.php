@@ -157,4 +157,40 @@ class IsolatorTest extends TestCase
 
         $this->assertSame($expected, $output);
     }
+
+    public static function escapingProvider(): array
+    {
+        return [
+            'markup in a matching paragraph' => [
+                ['care'],
+                '<p>x &lt;img src=x onerror=alert(1)&gt; with care</p>',
+                '<p>x &lt;img src=x onerror=alert(1)&gt; with <strong>care</strong></p>',
+            ],
+            'markup in the matched term' => [
+                ['<b>'],
+                '<p>type &lt;b&gt; here</p>',
+                '<p>type <strong>&lt;b&gt;</strong> &hellip;</p>',
+            ],
+            'markup when nothing matches' => [
+                ['zzz'],
+                '<p>a &lt;script&gt;alert(1)&lt;/script&gt; b</p>',
+                '<p>a &lt;script&gt;alert(1)&lt;/script&gt; b</p>',
+            ],
+            'an ampersand' => [
+                ['care'],
+                '<p>Tom &amp; Jerry care</p>',
+                '<p>Tom &amp; Jerry <strong>care</strong></p>',
+            ],
+        ];
+    }
+
+    /**
+     * The DOM decodes entities, so the text it hands back is escaped again before
+     * it goes into the excerpt, which is printed raw (it carries <strong>).
+     */
+    #[DataProvider('escapingProvider')]
+    public function testTheContentTextIsEscapedInTheExcerpt(array $terms, string $html, string $expected): void
+    {
+        $this->assertSame($expected, $this->excerpt($terms, $html));
+    }
 }

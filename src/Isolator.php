@@ -76,7 +76,7 @@ class Isolator
     if ($found) {
       $this->content = '<p>' . implode(' ', $found) . '</p>';
     } else {
-      $this->content = '<p>' . implode(' [...] ', $paragraphs) . '</p>';
+      $this->content = '<p>' . implode(' [...] ', array_map($this->escape(...), $paragraphs)) . '</p>';
     }
 
     $this->content = mb_ereg_replace('\s\s+', ' ', $this->content);
@@ -92,7 +92,7 @@ class Isolator
     $after   = $m[3];
 
     $keep = [
-      '<strong>' . $content . '</strong>',
+      '<strong>' . $this->escape($content) . '</strong>',
     ];
 
     if (!empty($before)) {
@@ -104,7 +104,7 @@ class Isolator
         if ($w > ($this->numWordsAround - 4) && 1 === preg_match("/[\):,;\.]+/", $beforeWords[$i])) {
           break;
         }
-        array_unshift($keep, $beforeWords[$i]);
+        array_unshift($keep, $this->escape($beforeWords[$i]));
         $w++;
       }
 
@@ -118,6 +118,15 @@ class Isolator
     }
 
     return implode(' ', $keep);
+  }
+
+  /**
+   * Text read from the DOM has its entities decoded: escape it again before it
+   * goes back into the excerpt, which is HTML.
+   */
+  private function escape(string $text): string
+  {
+    return htmlspecialchars($text, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8');
   }
 
   private function extractParagraphs(\DOMNode $root, array &$paragraphs = []): array
