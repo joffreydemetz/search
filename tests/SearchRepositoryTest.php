@@ -138,4 +138,17 @@ class SearchRepositoryTest extends TestCase
         $this->assertCount(2, $this->queries);
         $this->assertInsert($this->queries[1]);
     }
+
+    /**
+     * Only the lookup may fail over to the INSERT: a failed UPDATE used to insert
+     * a second row for the same component and term.
+     */
+    public function testAFailedUpdateIsNotFollowedByAnInsert(): void
+    {
+        $this->assertFalse($this->save($this->capturingDatabase('pages', executeFailure: new DatabaseException('lock wait timeout'))));
+
+        $this->assertCount(2, $this->queries);
+        $this->assertLookup($this->queries[0]);
+        $this->assertStringStartsWith('UPDATE #__search' . PHP_EOL, (string) $this->queries[1]);
+    }
 }

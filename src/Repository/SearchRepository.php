@@ -37,6 +37,8 @@ class SearchRepository
   public function save(): bool
   {
     try {
+      // a failed lookup falls back to the INSERT, a failed UPDATE does not
+      $exists = false;
       try {
         $this->dbo->setQuery(
           (new SelectQuery())
@@ -48,21 +50,23 @@ class SearchRepository
             ->bindValue(':term', $this->term)
         );
 
-        if ($this->dbo->loadResult()) {
-          $this->dbo->setQuery(
-            (new UpdateQuery())
-              ->update('#__search')
-              ->set('hits = hits+1')
-              ->where('component = :component')
-              ->bindValue(':component', $this->component)
-              ->where('term = :term')
-              ->bindValue(':term', $this->term)
-          );
-
-          $this->dbo->execute();
-          return true;
-        }
+        $exists = (bool) $this->dbo->loadResult();
       } catch (\Exception $e) {}
+
+      if ($exists) {
+        $this->dbo->setQuery(
+          (new UpdateQuery())
+            ->update('#__search')
+            ->set('hits = hits+1')
+            ->where('component = :component')
+            ->bindValue(':component', $this->component)
+            ->where('term = :term')
+            ->bindValue(':term', $this->term)
+        );
+
+        $this->dbo->execute();
+        return true;
+      }
 
       $this->dbo->setQuery(
         (new InsertQuery())
