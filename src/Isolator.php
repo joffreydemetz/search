@@ -19,8 +19,13 @@ class Isolator
 
   public function setRegexFromSearchArray(array $searchArray): static
   {
-    $terms = array_filter($searchArray, fn($term) => '' !== $term);
+    $terms = array_filter($searchArray, fn($term) => '' !== $term && mb_check_encoding($term, 'UTF-8'));
     $terms = array_map(fn($term) => preg_quote($term, '/'), $terms);
+
+    if (!$terms) {
+      $this->regex = '';
+      return $this;
+    }
 
     $regex = ''
       . '(.*)'
@@ -51,7 +56,9 @@ class Isolator
     libxml_use_internal_errors(true);
     $root = new \DOMDocument('1.0', 'utf-8');
     $root->preserveWhiteSpace = false;
-    $root->loadHtml('<html>' . $this->content . '</html>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    // libxml reads HTML without a charset as Latin-1: hand it ASCII, the rest as numeric entities
+    $html = mb_encode_numericentity($this->content, [0x80, 0x10FFFF, 0, 0x1FFFFF], 'UTF-8');
+    $root->loadHtml('<html>' . $html . '</html>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
     $box = $root->getElementsByTagName('html');
 
@@ -64,11 +71,13 @@ class Isolator
     }
 
     $found = [];
-    foreach ($paragraphs as $p) {
-      if (preg_match("/" . $this->regex . "/is", $p)) {
-        $test = preg_replace_callback("/" . $this->regex . "/is", [$this, 'highlightCallback'], $p);
-        if ($test) {
-          $found[] = $test;
+    if ('' !== $this->regex) {
+      foreach ($paragraphs as $p) {
+        if (preg_match('/' . $this->regex . '/isu', $p)) {
+          $test = preg_replace_callback('/' . $this->regex . '/isu', [$this, 'highlightCallback'], $p);
+          if ($test) {
+            $found[] = $test;
+          }
         }
       }
     }
@@ -91,9 +100,8 @@ class Isolator
     $content = $m[2];
     $after   = $m[3];
 
-    $keep = [
-      '<strong>' . $this->escape($content) . '</strong>',
-    ];
+    $words = [];
+    $cut = false;
 
     if (!empty($before)) {
       $beforeWords = explode(' ', $before);
@@ -104,20 +112,26 @@ class Isolator
         if ($w > ($this->numWordsAround - 4) && 1 === preg_match("/[\):,;\.]+/", $beforeWords[$i])) {
           break;
         }
-        array_unshift($keep, $this->escape($beforeWords[$i]));
+        array_unshift($words, $this->escape($beforeWords[$i]));
         $w++;
       }
 
-      if ($cbw > $w) {
-        array_unshift($keep, '&hellip;');
-      }
+      $cut = $cbw > $w;
+    }
+
+    // the last word before the match is '' when the match starts a word, else the
+    // start of the word the match is in: glued to the highlight
+    $excerpt = implode(' ', $words) . '<strong>' . $this->escape($content) . '</strong>';
+
+    if ($cut) {
+      $excerpt = '&hellip; ' . $excerpt;
     }
 
     if (!empty($after)) {
-      $keep[] = '&hellip;';
+      $excerpt .= ' &hellip;';
     }
 
-    return implode(' ', $keep);
+    return $excerpt;
   }
 
   /**

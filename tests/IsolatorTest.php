@@ -193,4 +193,51 @@ class IsolatorTest extends TestCase
     {
         $this->assertSame($expected, $this->excerpt($terms, $html));
     }
+
+    public static function noTermProvider(): array
+    {
+        return [
+            'no term' => [[]],
+            'only empty terms' => [['', '']],
+            'a term that is not valid UTF-8' => [["\xC3"]],
+        ];
+    }
+
+    /**
+     * Without a usable term the pattern used to be (.*)()(.*): every paragraph
+     * matched and got an empty <strong></strong>; a broken UTF-8 term made the
+     * excerpt null (TypeError).
+     */
+    #[DataProvider('noTermProvider')]
+    public function testWithoutAUsableTermNothingIsHighlighted(array $terms): void
+    {
+        $this->assertSame("<p>caf\u{e9} noir [...] Beta.</p>", $this->excerpt($terms, "<p>caf\u{e9} noir</p><p>Beta.</p>"));
+    }
+
+    public function testAccentedCapitalsMatchCaseInsensitively(): void
+    {
+        $this->assertSame(
+            "<p>un <strong>\u{e9}t\u{e9}</strong> &hellip;</p>",
+            $this->excerpt(["\u{c9}T\u{c9}"], "<p>un \u{e9}t\u{e9} chaud</p>")
+        );
+    }
+
+    public static function midWordProvider(): array
+    {
+        return [
+            'end of a word' => [['each'], '<p>We teach daily.</p>', '<p>We t<strong>each</strong> &hellip;</p>'],
+            'inside a word' => [['form'], '<p>Read the information now.</p>', '<p>Read the in<strong>form</strong> &hellip;</p>'],
+            'whole word' => [['the'], '<p>Read the information now.</p>', '<p>Read <strong>the</strong> &hellip;</p>'],
+        ];
+    }
+
+    /**
+     * The SQL search is LIKE '%word%', so a match inside a word is common: the
+     * start of the word stays glued to the highlight.
+     */
+    #[DataProvider('midWordProvider')]
+    public function testAMatchInsideAWordStaysGluedToIt(array $terms, string $html, string $expected): void
+    {
+        $this->assertSame($expected, $this->excerpt($terms, $html));
+    }
 }
