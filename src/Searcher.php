@@ -85,7 +85,7 @@ abstract class Searcher implements SearcherInterface
     $query
       ->select($this->dbo->quote($this->name) . ' AS component');
 
-    if ($this->term) {
+    if ('' !== trim($this->term)) {
       $or = [];
       if ('exact' === $this->type) {
         $this->exactSearch($or, $this->term);
@@ -143,7 +143,7 @@ abstract class Searcher implements SearcherInterface
 
   protected function containsSearch(array &$or, string $searched): void
   {
-    $words = explode(' ', $searched);
+    $words = $this->words($searched);
 
     foreach ($this->fields as $field) {
       foreach ($words as $word) {
@@ -154,7 +154,7 @@ abstract class Searcher implements SearcherInterface
 
   protected function wordsSearch(array &$or, string $searched): void
   {
-    $words = explode(' ', $searched);
+    $words = $this->words($searched);
 
     foreach ($this->fields as $field) {
       $and = [];
@@ -169,14 +169,23 @@ abstract class Searcher implements SearcherInterface
   {
     $arrayForRegex = [];
 
-    if ($this->term) {
+    if ('' !== trim($this->term)) {
       if ('exact' === $this->type) {
         $arrayForRegex[] = $this->term;
       } else {
-        $arrayForRegex = explode(' ', $this->term);
+        $arrayForRegex = $this->words($this->term);
       }
     }
 
     return $arrayForRegex;
+  }
+
+  /**
+   * The words of a term, without the empty ones that double, leading or
+   * trailing spaces leave (LIKE '%%' matches every row).
+   */
+  protected function words(string $searched): array
+  {
+    return array_values(array_filter(explode(' ', $searched), fn($word) => '' !== $word));
   }
 }

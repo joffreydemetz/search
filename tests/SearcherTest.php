@@ -182,4 +182,61 @@ class SearcherTest extends TestCase
         );
         $this->assertSame('<p>Alpha. [...] Beta.</p>', $rows[1]->content);
     }
+
+    public function testTheTermZeroIsSearched(): void
+    {
+        $query = new SelectQuery();
+        $searcher = $this->searcher()->setType('exact')->setTerm('0');
+
+        $searcher->makeQuery($query);
+
+        $this->assertSame("SELECT 'pages' AS component" . PHP_EOL . "WHERE (title LIKE '%0%')", (string) $query);
+        $this->assertSame(['0'], $searcher->regex());
+    }
+
+    public static function spacingProvider(): array
+    {
+        return [
+            'contains, trailing space' => ['contains', 'foo ', "(title LIKE '%foo%')", ['foo']],
+            'contains, double space' => ['contains', 'foo  bar', "(title LIKE '%foo%' OR title LIKE '%bar%')", ['foo', 'bar']],
+            'words, leading space' => ['', ' foo bar', "((title LIKE '%foo%' AND title LIKE '%bar%'))", ['foo', 'bar']],
+        ];
+    }
+
+    /**
+     * An empty word used to become LIKE '%%', which in contains mode (OR) matches
+     * every row.
+     */
+    #[DataProvider('spacingProvider')]
+    public function testEmptyWordsAreSkipped(string $type, string $term, string $where, array $regex): void
+    {
+        $query = new SelectQuery();
+        $searcher = $this->searcher()->setType($type)->setTerm($term);
+
+        $searcher->makeQuery($query);
+
+        $this->assertSame("SELECT 'pages' AS component" . PHP_EOL . 'WHERE ' . $where, (string) $query);
+        $this->assertSame($regex, $searcher->regex());
+    }
+
+    public static function blankTermProvider(): array
+    {
+        return [
+            'exact' => ['exact'],
+            'contains' => ['contains'],
+            'words' => [''],
+        ];
+    }
+
+    #[DataProvider('blankTermProvider')]
+    public function testAWhitespaceTermIsAnEmptySearch(string $type): void
+    {
+        $query = new SelectQuery();
+        $searcher = $this->searcher()->setType($type)->setTerm('   ');
+
+        $searcher->makeQuery($query);
+
+        $this->assertSame("SELECT 'pages' AS component", (string) $query);
+        $this->assertSame([], $searcher->regex());
+    }
 }
