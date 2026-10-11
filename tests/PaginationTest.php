@@ -77,6 +77,19 @@ class PaginationTest extends TestCase
                 [4 => self::gap(), 5 => self::page(5), 6 => self::page(6), 7 => self::page(7), 8 => self::page(8), 9 => self::page(9), 10 => self::current(10)],
                 self::step('Previous', 9), self::step('Next', 11, true), 10,
             ],
+            // 1.0.4: a page out of range is clamped (page 99 of 5 used to link to 98 and 100)
+            'a page beyond the last is the last' => [99, 10, 50,
+                [1 => self::page(1), 2 => self::page(2), 3 => self::page(3), 4 => self::page(4), 5 => self::current(5)],
+                self::step('Previous', 4), self::step('Next', 6, true), 5,
+            ],
+            'page zero is the first' => [0, 10, 50,
+                [1 => self::current(1), 2 => self::page(2), 3 => self::page(3), 4 => self::page(4), 5 => self::page(5)],
+                self::step('Previous', 0, true), self::step('Next', 2), 5,
+            ],
+            'a negative page is the first' => [-3, 10, 50,
+                [1 => self::current(1), 2 => self::page(2), 3 => self::page(3), 4 => self::page(4), 5 => self::page(5)],
+                self::step('Previous', 0, true), self::step('Next', 2), 5,
+            ],
         ];
     }
 

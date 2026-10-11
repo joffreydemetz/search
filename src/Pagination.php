@@ -50,7 +50,9 @@ class Pagination
   {
     $nbPages = $this->limit ? max(0, (int)ceil($this->total / $this->limit)) : 0;
 
-    $firstPageDisplayed = $this->page - (self::MAX_PAGES_DISPLAYED / 2);
+    // a page out of range is the nearest one (99 of 5 used to link to 98 and 100)
+    $current = min(max(1, $this->page), max(1, $nbPages));
+    $firstPageDisplayed = $current - (self::MAX_PAGES_DISPLAYED / 2);
 
     if ($firstPageDisplayed < 1) {
       $firstPageDisplayed = 1;
@@ -85,7 +87,7 @@ class Pagination
       $links->list[$page]->page = $page;
       $links->list[$page]->text = (string)$page;
 
-      if ($links->list[$page]->page === $this->page) {
+      if ($links->list[$page]->page === $current) {
         $links->list[$page]->current = true;
       }
     }
@@ -105,21 +107,21 @@ class Pagination
 
     $links->previous = new \stdClass;
     $links->previous->text = $this->i18n['PREVIOUS'];
-    $links->previous->page = $this->page - 1;
+    $links->previous->page = $current - 1;
 
     $links->next = new \stdClass;
     $links->next->text = $this->i18n['NEXT'];
-    $links->next->page = $this->page + 1;
+    $links->next->page = $current + 1;
 
     $links->end = new \stdClass;
     $links->end->page = $nbPages;
     $links->end->text = $this->i18n['END'];
 
-    if ($this->page === 1) {
+    if ($current === 1) {
       $links->previous->disabled = true;
     }
 
-    if ($this->page === $nbPages) {
+    if ($current === $nbPages) {
       $links->next->disabled = true;
     }
 
