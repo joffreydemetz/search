@@ -86,6 +86,10 @@ $excerpt = (new JDZ\Search\Isolator())
 
 `(new JDZ\Search\Repository\SearchRepository())->setDbo($dbo)->setComponent('blog')->setTerm('slim twig')->save()` logs the term in `#__search`, incrementing `hits` when it is already there. The table definition is in `data/sql/search.mysql.sql`.
 
+## Changelog
+
+- **1.0.4** (2026-10-11) — the LIKE wildcards of a term are escaped (`50%` matched "50 euros" and "5000"; `ESCAPE` clause added when one was escaped); a search without a field throws `SearchException` (it built `WHERE ()`); `Pagination` clamps a page out of range; the excerpt highlights every match in a window of words around the first one and keeps the words after it (a greedy pattern kept the last match only and always cut what followed); a row is `invalid` when no usable term remains (the flag was unreachable); a curly apostrophe in the content matches the straight one of the term (the replace was a no-op). `Isolator::hasTerms()`.
+
 ## License
 
 MIT
