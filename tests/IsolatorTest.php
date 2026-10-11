@@ -94,7 +94,7 @@ class IsolatorTest extends TestCase
     {
         $output = $this->excerpt(['care'], '<p>First care here.</p><p>Nothing.</p><ul><li>Second care there.</li></ul>');
 
-        $this->assertSame('<p>First <strong>care</strong> &hellip; Second <strong>care</strong> &hellip;</p>', $output);
+        $this->assertSame('<p>First <strong>care</strong> here. Second <strong>care</strong> there.</p>', $output);
     }
 
     public function testEachTermCanMatchItsOwnParagraph(): void
@@ -106,22 +106,22 @@ class IsolatorTest extends TestCase
 
     public function testAdjacentEllipsesAreMerged(): void
     {
-        $output = $this->excerpt(['x'], '<p>a b c d e f g h i j k l x m</p><p>a b c d e f g h i j k l x</p>', 3);
+        $output = $this->excerpt(['x'], '<p>a b c d e f g h i j k l x m n o p q</p><p>a b c d e f g h i j k l x</p>', 3);
 
-        $this->assertSame('<p>&hellip; j k l <strong>x</strong> &hellip; j k l <strong>x</strong></p>', $output);
+        $this->assertSame('<p>&hellip; j k l <strong>x</strong> m n o &hellip; j k l <strong>x</strong></p>', $output);
     }
 
     public function testMatchIsCaseInsensitiveAndKeepsTheContentCase(): void
     {
         $output = $this->excerpt(['care'], '<p>Handled with CARE today.</p>');
 
-        $this->assertSame('<p>Handled with <strong>CARE</strong> &hellip;</p>', $output);
+        $this->assertSame('<p>Handled with <strong>CARE</strong> today.</p>', $output);
     }
 
     public static function edgeProvider(): array
     {
         return [
-            'term opens the paragraph' => ['<p>care is all</p>', '<p><strong>care</strong> &hellip;</p>'],
+            'term opens the paragraph' => ['<p>care is all</p>', '<p><strong>care</strong> is all</p>'],
             'term closes the paragraph' => ['<p>all is care</p>', '<p>all is <strong>care</strong></p>'],
             'plain text without markup' => ['plain text with care', '<p>plain text with <strong>care</strong></p>'],
         ];
@@ -136,8 +136,8 @@ class IsolatorTest extends TestCase
     public static function windowProvider(): array
     {
         return [
-            'five words' => [5, '<p>&hellip; w8 w9 w10 w11 w12 <strong>target</strong> &hellip;</p>'],
-            'ten words by default' => [null, '<p>&hellip; w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 <strong>target</strong> &hellip;</p>'],
+            'five words' => [5, '<p>&hellip; w8 w9 w10 w11 w12 <strong>target</strong> end</p>'],
+            'ten words by default' => [null, '<p>&hellip; w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 <strong>target</strong> end</p>'],
         ];
     }
 
@@ -169,7 +169,7 @@ class IsolatorTest extends TestCase
             'markup in the matched term' => [
                 ['<b>'],
                 '<p>type &lt;b&gt; here</p>',
-                '<p>type <strong>&lt;b&gt;</strong> &hellip;</p>',
+                '<p>type <strong>&lt;b&gt;</strong> here</p>',
             ],
             'markup when nothing matches' => [
                 ['zzz'],
@@ -217,7 +217,7 @@ class IsolatorTest extends TestCase
     public function testAccentedCapitalsMatchCaseInsensitively(): void
     {
         $this->assertSame(
-            "<p>un <strong>\u{e9}t\u{e9}</strong> &hellip;</p>",
+            "<p>un <strong>\u{e9}t\u{e9}</strong> chaud</p>",
             $this->excerpt(["\u{c9}T\u{c9}"], "<p>un \u{e9}t\u{e9} chaud</p>")
         );
     }
@@ -225,9 +225,9 @@ class IsolatorTest extends TestCase
     public static function midWordProvider(): array
     {
         return [
-            'end of a word' => [['each'], '<p>We teach daily.</p>', '<p>We t<strong>each</strong> &hellip;</p>'],
-            'inside a word' => [['form'], '<p>Read the information now.</p>', '<p>Read the in<strong>form</strong> &hellip;</p>'],
-            'whole word' => [['the'], '<p>Read the information now.</p>', '<p>Read <strong>the</strong> &hellip;</p>'],
+            'end of a word' => [['each'], '<p>We teach daily.</p>', '<p>We t<strong>each</strong> daily.</p>'],
+            'inside a word' => [['form'], '<p>Read the information now.</p>', '<p>Read the in<strong>form</strong>ation now.</p>'],
+            'whole word' => [['the'], '<p>Read the information now.</p>', '<p>Read <strong>the</strong> information now.</p>'],
         ];
     }
 
@@ -239,5 +239,60 @@ class IsolatorTest extends TestCase
     public function testAMatchInsideAWordStaysGluedToIt(array $terms, string $html, string $expected): void
     {
         $this->assertSame($expected, $this->excerpt($terms, $html));
+    }
+
+    // --- 1.0.4 ---
+
+    /**
+     * The pattern was a greedy (.*)(term)(.*): only the last match of a paragraph
+     * was highlighted, and whatever followed it was always cut. Every match is
+     * highlighted now, in a window of numWordsAround words around the first one.
+     */
+    public function testEveryMatchOfTheWindowIsHighlighted(): void
+    {
+        $this->assertSame(
+            '<p><strong>care</strong> for <strong>care</strong> and <strong>care</strong></p>',
+            $this->excerpt(['care'], '<p>care for care and care</p>')
+        );
+    }
+
+    public function testExcerptKeepsNumWordsAroundAfterTheMatch(): void
+    {
+        $this->assertSame(
+            '<p>start <strong>target</strong> w1 w2 w3 w4 w5 &hellip;</p>',
+            $this->excerpt(['target'], '<p>start target w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12</p>', 5)
+        );
+    }
+
+    public function testTheWindowIsAroundTheFirstMatch(): void
+    {
+        $this->assertSame(
+            '<p>a <strong>x</strong> b c <strong>x</strong> d &hellip;</p>',
+            $this->excerpt(['x'], '<p>a x b c x d e f g x h</p>', 4)
+        );
+    }
+
+    /** the content's curly apostrophe used to be "replaced" by itself: l'eau never matched l’eau */
+    public function testACurlyApostropheInTheContentMatchesAStraightOne(): void
+    {
+        $this->assertSame(
+            "<p>vive <strong>l'eau</strong> fra\u{ee}che</p>",
+            $this->excerpt(["l'eau"], "<p>vive l\u{2019}eau fra\u{ee}che</p>")
+        );
+    }
+
+    public static function termSets(): array
+    {
+        return [
+            'a term' => [['care'], true],
+            'no term' => [[], false],
+            'only unusable terms' => [['', "\xC3"], false],
+        ];
+    }
+
+    #[DataProvider('termSets')]
+    public function testHasTermsSaysWhetherAUsableTermRemains(array $terms, bool $expected): void
+    {
+        $this->assertSame($expected, (new Isolator())->setRegexFromSearchArray($terms)->hasTerms());
     }
 }

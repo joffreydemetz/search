@@ -3,11 +3,16 @@
 namespace JDZ\Search;
 
 /**
+ * The excerpt of a result: the paragraphs of its content that match the
+ * search terms, each cut to a window of words around its first match, every
+ * match of the window in a <strong>.
+ *
  * @author Joffrey Demetz <joffrey.demetz@gmail.com>
  */
 class Isolator
 {
   private int $numWordsAround = 10;
+  /** the terms alternation, quoted for a regex; '' without a usable term */
   private string $regex = '';
   private string $content = '';
 
@@ -22,20 +27,17 @@ class Isolator
     $terms = array_filter($searchArray, fn($term) => '' !== $term && mb_check_encoding($term, 'UTF-8'));
     $terms = array_map(fn($term) => preg_quote($term, '/'), $terms);
 
-    if (!$terms) {
-      $this->regex = '';
-      return $this;
-    }
+    $this->regex = $terms ? implode('|', $terms) : '';
 
-    $regex = ''
-      . '(.*)'
-      . '('
-      . implode('|', $terms)
-      . ')'
-      . '(.*)';
-
-    $this->regex = $regex;
     return $this;
+  }
+
+  /**
+   * Whether a usable term remains (not empty, valid UTF-8).
+   */
+  public function hasTerms(): bool
+  {
+    return '' !== $this->regex;
   }
 
   public function setContent(string $content): static
@@ -54,6 +56,7 @@ class Isolator
     $paragraphs = [];
 
     libxml_use_internal_errors(true);
+
     $root = new \DOMDocument('1.0', 'utf-8');
     $root->preserveWhiteSpace = false;
     // libxml reads HTML without a charset as Latin-1: hand it ASCII, the rest as numeric entities
@@ -61,7 +64,6 @@ class Isolator
     $root->loadHtml('<html>' . $html . '</html>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
     $box = $root->getElementsByTagName('html');
-
     if ($box->length) {
       foreach ($box as $item) {
         foreach ($item->childNodes as $element) {
@@ -71,13 +73,11 @@ class Isolator
     }
 
     $found = [];
-    if ('' !== $this->regex) {
+
+    if ($this->hasTerms()) {
       foreach ($paragraphs as $p) {
-        if (preg_match('/' . $this->regex . '/isu', $p)) {
-          $test = preg_replace_callback('/' . $this->regex . '/isu', [$this, 'highlightCallback'], $p);
-          if ($test) {
-            $found[] = $test;
-          }
+        if (null !== ($excerpt = $this->excerpt($p))) {
+          $found[] = $excerpt;
         }
       }
     }
@@ -94,40 +94,59 @@ class Isolator
     return $this;
   }
 
-  private function highlightCallback(array $m): string
+  /**
+   * The excerpt of a paragraph: numWordsAround words before its first match
+   * (fewer after a sentence break near the window's edge) and after it, every
+   * match in the window highlighted; null when nothing matches.
+   *
+   * The pattern used to be a greedy (.*)(term)(.*): only the last match was
+   * highlighted and whatever followed it was always cut.
+   */
+  private function excerpt(string $paragraph): ?string
   {
-    $before  = $m[1];
-    $content = $m[2];
-    $after   = $m[3];
+    $pattern = '/(' . $this->regex . ')/isu';
 
+    if (1 !== preg_match($pattern, $paragraph, $m, PREG_OFFSET_CAPTURE)) {
+      return null;
+    }
+
+    $before = substr($paragraph, 0, $m[0][1]);
+    $rest = substr($paragraph, $m[0][1]);
+
+    // the words before: the last one is '' when the match starts a word, else
+    // the start of the word the match is in, glued to the highlight
     $words = [];
-    $cut = false;
+    $cutBefore = false;
 
-    if (!empty($before)) {
+    if ('' !== $before) {
       $beforeWords = explode(' ', $before);
-
       $w = 0;
       $cbw = count($beforeWords);
+
       for ($i = $cbw - 1; $i >= 0 && $w <= $this->numWordsAround; $i--) {
         if ($w > ($this->numWordsAround - 4) && 1 === preg_match("/[\):,;\.]+/", $beforeWords[$i])) {
           break;
         }
-        array_unshift($words, $this->escape($beforeWords[$i]));
+
+        array_unshift($words, $beforeWords[$i]);
         $w++;
       }
 
-      $cut = $cbw > $w;
+      $cutBefore = $cbw > $w;
     }
 
-    // the last word before the match is '' when the match starts a word, else the
-    // start of the word the match is in: glued to the highlight
-    $excerpt = implode(' ', $words) . '<strong>' . $this->escape($content) . '</strong>';
+    // the match and the words after it
+    $afterWords = explode(' ', $rest);
+    $cutAfter = count($afterWords) > $this->numWordsAround + 1;
+    $afterWords = array_slice($afterWords, 0, $this->numWordsAround + 1);
 
-    if ($cut) {
+    $excerpt = $this->mark(implode(' ', $words) . implode(' ', $afterWords), $pattern);
+
+    if ($cutBefore) {
       $excerpt = '&hellip; ' . $excerpt;
     }
 
-    if (!empty($after)) {
+    if ($cutAfter) {
       $excerpt .= ' &hellip;';
     }
 
@@ -135,9 +154,20 @@ class Isolator
   }
 
   /**
-   * Text read from the DOM has its entities decoded: escape it again before it
-   * goes back into the excerpt, which is HTML.
+   * The text escaped, every match of the pattern in a <strong>.
    */
+  private function mark(string $text, string $pattern): string
+  {
+    $pieces = preg_split($pattern, $text, -1, PREG_SPLIT_DELIM_CAPTURE);
+    $marked = '';
+
+    foreach ($pieces as $i => $piece) {
+      $marked .= 1 === $i % 2 ? '<strong>' . $this->escape($piece) . '</strong>' : $this->escape($piece);
+    }
+
+    return $marked;
+  }
+
   private function escape(string $text): string
   {
     return htmlspecialchars($text, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -170,12 +200,11 @@ class Isolator
       }
 
       $array['_type'] = $root->nodeName;
+
       if ($root->hasChildNodes()) {
         $children = $root->childNodes;
-
         for ($i = 0, $n = $children->length; $i < $n; $i++) {
           $child = $this->extractParagraphs($children->item($i), $paragraphs);
-
           if (!empty($child)) {
             $array['_children'][] = $child;
           }
@@ -187,7 +216,6 @@ class Isolator
 
     if ($root->nodeType == XML_TEXT_NODE || $root->nodeType == XML_CDATA_SECTION_NODE) {
       $value = $root->nodeValue;
-
       if ('' !== trim($value)) {
         $array['_type'] = '_text';
         $array['_content'] = $value;
@@ -200,7 +228,8 @@ class Isolator
 
   private function cleanContent(string $content): string
   {
-    $content = str_replace("'", "'", $content);
+    // a curly apostrophe reads as the straight one of the search term (the replace used to be a no-op)
+    $content = str_replace("\u{2019}", "'", $content);
     $content = str_replace("œ", "&oelig;", $content);
     $content = str_replace("&nbsp;", " ", $content);
     $content = mb_ereg_replace('\s\s+', ' ', $content);
