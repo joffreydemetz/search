@@ -5,6 +5,7 @@ namespace JDZ\Search;
 use JDZ\Database\Contract\DatabaseInterface;
 use JDZ\Database\Query\SelectQuery;
 use JDZ\Search\Contract\SearcherInterface;
+use JDZ\Search\Exception\SearchException;
 
 /**
  * @author Joffrey Demetz <joffrey.demetz@gmail.com>
@@ -86,6 +87,11 @@ abstract class Searcher implements SearcherInterface
       ->select($this->dbo->quote($this->name) . ' AS component');
 
     if ('' !== trim($this->term)) {
+      // no field gave WHERE (): a syntax error from the database
+      if (!$this->fields) {
+        throw new SearchException('No field to search in: ' . $this->name);
+      }
+
       $or = [];
       if ('exact' === $this->type) {
         $this->exactSearch($or, $this->term);
@@ -101,6 +107,10 @@ abstract class Searcher implements SearcherInterface
 
   public function parseResults(array &$rows): void
   {
+    $this->isolator
+      ->setNumWordsAround(14)
+      ->setRegexFromSearchArray($this->makeRegex());
+
     foreach ($rows as $row) {
       if (!isset($row->group)) {
         $row->group = '';
@@ -121,14 +131,12 @@ abstract class Searcher implements SearcherInterface
       }
 
       $row->content = $this->isolator
-        ->setNumWordsAround(14)
-        ->setRegexFromSearchArray($this->makeRegex())
         ->setContent($row->content)
         ->highlight()
         ->getContent();
 
-      if (!$row->content) {
-        $row->content = '';
+      // no usable term (the flag used to wait for an empty content, which an excerpt never is)
+      if (!$this->isolator->hasTerms()) {
         $row->invalid = true;
       }
     }
@@ -137,8 +145,24 @@ abstract class Searcher implements SearcherInterface
   protected function exactSearch(array &$or, string $searched): void
   {
     foreach ($this->fields as $field) {
-      $or[] = $field . ' LIKE ' . $this->dbo->quote('%' . $searched . '%');
+      $or[] = $this->like($field, $searched);
     }
+  }
+
+  /**
+   * field LIKE '%word%', the LIKE wildcards of the word escaped (50% matched
+   * "50 euros" and "5000"); the ESCAPE clause only when one was escaped.
+   */
+  protected function like(string $field, string $word): string
+  {
+    $escaped = addcslashes($word, '%_\\');
+    $like = $field . ' LIKE ' . $this->dbo->quote('%' . $escaped . '%');
+
+    if ($escaped !== $word) {
+      $like .= ' ESCAPE ' . $this->dbo->quote('\\');
+    }
+
+    return $like;
   }
 
   protected function containsSearch(array &$or, string $searched): void
@@ -147,7 +171,7 @@ abstract class Searcher implements SearcherInterface
 
     foreach ($this->fields as $field) {
       foreach ($words as $word) {
-        $or[] = $field . ' LIKE ' . $this->dbo->quote('%' . $word . '%');
+        $or[] = $this->like($field, $word);
       }
     }
   }
@@ -159,7 +183,7 @@ abstract class Searcher implements SearcherInterface
     foreach ($this->fields as $field) {
       $and = [];
       foreach ($words as $word) {
-        $and[] = $field . ' LIKE ' . $this->dbo->quote('%' . $word . '%');
+        $and[] = $this->like($field, $word);
       }
       $or[] = '(' . implode(' AND ', $and) . ')';
     }

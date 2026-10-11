@@ -4,6 +4,7 @@ namespace JDZ\Search\Tests;
 
 use JDZ\Database\Contract\DatabaseInterface;
 use JDZ\Database\Query\SelectQuery;
+use JDZ\Search\Exception\SearchException;
 use JDZ\Search\Searcher;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -177,10 +178,79 @@ class SearcherTest extends TestCase
         $this->searcher()->setType('exact')->setTerm('with care')->parseResults($rows);
 
         $this->assertSame(
-            '<p>&hellip; w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 <strong>with care</strong> &hellip;</p>',
+            '<p>&hellip; w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 <strong>with care</strong>, always.</p>',
             $rows[0]->content
         );
         $this->assertSame('<p>Alpha. [...] Beta.</p>', $rows[1]->content);
+    }
+
+    // --- 1.0.4 ---
+
+    public static function wildcards(): array
+    {
+        return [
+            'percent' => ['50%', "(title LIKE '%50\\\\%%' ESCAPE '\\\\')"],
+            'underscore' => ['a_b', "(title LIKE '%a\\\\_b%' ESCAPE '\\\\')"],
+            'no wildcard, no ESCAPE clause' => ['plain', "(title LIKE '%plain%')"],
+        ];
+    }
+
+    /** 50% used to be the LIKE wildcard: it matched "50 euros", "5000"... */
+    #[DataProvider('wildcards')]
+    public function testLikeWildcardsInATermAreEscaped(string $term, string $where): void
+    {
+        $query = new SelectQuery();
+
+        $this->searcher()->setType('exact')->setTerm($term)->makeQuery($query);
+
+        $this->assertStringEndsWith('WHERE ' . $where, (string) $query);
+    }
+
+    public function testWildcardsAreEscapedInEveryWordOfAWordsSearch(): void
+    {
+        $query = new SelectQuery();
+
+        $this->searcher()->setTerm('100% sure')->makeQuery($query);
+
+        $this->assertStringEndsWith("WHERE ((title LIKE '%100\\\\%%' ESCAPE '\\\\' AND title LIKE '%sure%'))", (string) $query);
+    }
+
+    /** no field gave WHERE (): a syntax error from the database */
+    public function testSearchingWithoutAFieldThrows(): void
+    {
+        $this->expectException(SearchException::class);
+        $this->expectExceptionMessage('No field to search in: pages');
+
+        $this->searcher([])->setTerm('x')->makeQuery(new SelectQuery());
+    }
+
+    public function testAnEmptyTermWithoutAFieldIsStillAnEmptySearch(): void
+    {
+        $query = new SelectQuery();
+
+        $this->searcher([])->setTerm('')->makeQuery($query);
+
+        $this->assertStringNotContainsString('WHERE', (string) $query);
+    }
+
+    /** the invalid flag was set when the content was empty, which an excerpt never is */
+    public function testARowIsInvalidWhenNoUsableTermRemains(): void
+    {
+        $rows = [(object) ['content' => '<p>Alpha.</p>']];
+
+        $this->searcher()->setTerm("\xC3")->parseResults($rows);
+
+        $this->assertTrue($rows[0]->invalid);
+        $this->assertSame('<p>Alpha.</p>', $rows[0]->content);
+    }
+
+    public function testARowWithAUsableTermIsNotFlagged(): void
+    {
+        $rows = [(object) ['content' => '<p>Alpha.</p>']];
+
+        $this->searcher()->setTerm('zz')->parseResults($rows);
+
+        $this->assertObjectNotHasProperty('invalid', $rows[0]);
     }
 
     public function testTheTermZeroIsSearched(): void
